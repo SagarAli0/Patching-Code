@@ -1,0 +1,34 @@
+# Set variables for storage account, container, username, and date
+$storageAccountName = "patchstoreage2"
+$containerName = "windowsupdate"
+$currentUsername = $env:USERNAME
+$currentYearMonth = (Get-Date).ToString("yyyy-MM")
+# Set SAS token with specified start and end times with read only access
+$sasToken = "?sp=r&st=2024-01-17T14:17:38Z&se=2024-02-18T22:17:38Z&sv=2022-11-02&sr=c&sig=Wz%2F2JM3JEY8C%2FiHdsZZGIQJtiyiSbVNyuoiec2a9%2BMM%3D"
+#$sasToken = $args[0]
+# Specify the blobs to download from container, which will works as central repo
+$blobsToDownload = @("Cumulative Update for Windows 10 Version 22H2 for x64-based Systems.msu","Cumulative Update for .NET Framework 3.5, 4.8 and 4.8.1 for Windows 10 Version 22H2 for x64.msu")
+# Set TLS protocol version for security
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+# Iterate through each blob in the list
+foreach ($blobName in $blobsToDownload) {
+    try {
+        # Formulate the URL for the blob(update file) with SAS token
+        $blobUrl = "https://$storageAccountName.blob.core.windows.net/$containerName/$currentYearMonth%20$blobName$sasToken"
+        # Specify the local download path where to download update file
+        $localDownloadPath = "C:\Users\adminvm\Downloads\$currentYearMonth $blobName"
+        # Download the blob using SAS token
+        Invoke-WebRequest -Uri $blobUrl -OutFile $localDownloadPath
+        Write-Host "Blob downloaded successfully to '$localDownloadPath'."
+        # Install the downloaded update (no /force option, only /quiet and /norestart)
+        wusa $localDownloadPath /quiet /norestart -wait
+        Write-Host "Blob installed successfully to '$localDownloadPath'."
+    } catch {
+        # Handle any errors that occur during the process
+        Write-Host "Error: $_"
+    }
+}
+# Wait for 300 seconds (5 minutes) before restarting the computer to make sure that all updates installed properly before restarting the machine
+Start-Sleep -Seconds 300
+# Restart the computer forcefully
+Restart-Computer -Force
