@@ -1,0 +1,144 @@
+import os
+import time
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver import Chrome
+from selenium.webdriver.chrome.service import Service as ChromeService
+from webdriver_manager.chrome import ChromeDriverManager
+from azure.identity import DefaultAzureCredential
+from azure.storage.blob import BlobServiceClient
+import datetime
+class WindowsCatalog:
+
+    def __init__(self, Catalog_Name, Patch_Link):
+        # Maximum number of retries
+        max_retries = 5
+        retry_count = 0
+
+        while retry_count < max_retries:
+            try:
+                # Initiate the browser and Windows Catalog Website
+                options = Options()
+                options.add_argument('--headless=new')
+                self.driver = Chrome(options=options, service=ChromeService(ChromeDriverManager().install()))
+                self.driver.get(Patch_Link)
+                # self.driver.get('https://www.catalog.update.microsoft.com/Search.aspx?q=KB5011048')
+                self.driver.implicitly_wait(15)
+                self.driver.maximize_window()
+
+                # Switching Window from the main window to the Download window
+                Current_Window = self.driver.window_handles[0]
+
+                time.sleep(1)
+                print(Catalog_Name)
+                Download_Catalog_Button_path = f"//td[contains(@class,'resultsIconWidth ')]/following-sibling::td//a[contains(.,'{Catalog_Name}')]/parent::td//following-sibling::td/input"
+                print(Download_Catalog_Button_path)
+                self.driver.find_element(By.XPATH, Download_Catalog_Button_path).click()
+                time.sleep(5)
+
+                New_Window = self.driver.window_handles[1]
+                self.driver.switch_to.window(New_Window)
+                # _____________________________________________________
+
+                # Download Process Starts Here
+                Download_Link_path = '//a[@title]'
+                Downloaded_File_name = (self.driver.find_element(By.XPATH, Download_Link_path).text).strip()
+                self.driver.find_element(By.XPATH, Download_Link_path).click()
+
+                print("File Name:", Downloaded_File_name)
+                self.WaitUntilFileDownloaded(Downloaded_File_name, Catalog_Name)
+
+                # If the above steps are successful, break out of the loop
+                break
+
+            except Exception as e:
+                # Handle the exception (you can log the exception details if needed)
+                print(f"Attempt {retry_count + 1} failed: {e}")
+
+                # Increment the retry count
+                retry_count += 1
+
+                if retry_count < max_retries:
+                    # Optionally, you can introduce a delay before the next attempt
+                    time.sleep(1)  # Adjust the delay as needed
+                else:
+                    # If max retries are reached, print an error message and exit the loop
+                    print(f"Max retries reached. Unable to complete the process.")
+                    break
+
+    def WaitUntilFileDownloaded(self, Downloaded_File_name, Custom_File_Name):
+        '''
+        Wait for the file until it is downloaded into the system and exists there
+        :param Downloaded_File_name: File name that needs to be downloaded
+        :param Custom_File_Name: New name for the downloaded file
+        :return: Indication if the file downloaded or not
+        '''
+
+        Total_time = 0
+        file_path = rf'C:\Users\{os.getlogin()}\Downloads\{Downloaded_File_name}'
+
+        try:
+            while not os.path.exists(file_path) and Total_time <= 1800:
+                time.sleep(1)
+                Total_time += 1
+
+            if os.path.isfile(file_path):
+                new_file_path = rf'C:\Users\{os.getlogin()}\Downloads\{Custom_File_Name}{os.path.splitext(Downloaded_File_name)[1]}'
+                os.rename(file_path, new_file_path)
+                print(f'File Downloaded Successfully and Renamed to: {new_file_path}')
+                self.upload_to_blob_storage(new_file_path, Custom_File_Name)
+            else:
+                print(f"{file_path} isn't a file!")
+
+        except Exception as er:
+            print('Error in Function WaitUntilFileDownloaded() Error:', er)
+
+    def upload_to_blob_storage(self, local_file_path, blob_name):
+        '''
+        Upload a file to Azure Blob Storage
+        :param local_file_path: Local path of the file to be uploaded
+        :param blob_name: Name to be given to the blob in Azure Blob Storage
+        '''
+        try:
+            # Azure Storage Account details
+            account_name = "patchstoreage2"
+            container_name = "windowsupdate"
+
+            # Initialize Managed Identity credentials
+            credential = DefaultAzureCredential()
+
+            # Create a BlobServiceClient using the Managed Identity credentials
+            service_client = BlobServiceClient(account_url=f"https://{account_name}.blob.core.windows.net", credential=credential)
+
+            # Create a ContainerClient
+            container_client = service_client.get_container_client(container_name)
+
+            # Extract the file extension from the local file path
+            file_extension = os.path.splitext(local_file_path)[1]
+
+            # Create a BlobClient with the desired blob name and extension
+            blob_client = container_client.get_blob_client(blob_name + file_extension)
+
+            # Upload the file to the blob
+            with open(local_file_path, "rb") as data:
+                blob_client.upload_blob(data)
+
+            print(f"Blob '{blob_name + file_extension}' uploaded successfully.")
+
+        except Exception as e:
+            print(f"Error uploading to Azure Blob Storage: {e}")
+
+current_date = datetime.date.today()
+date_format = current_date.strftime('%Y-%m')
+patch_lst=[
+            "Cumulative Update for Windows 10 Version 22H2 for x64-based Systems",
+            "Cumulative Update for .NET Framework 3.5, 4.8 and 4.8.1 for Windows 10 Version 22H2 for x64",
+]
+link_lst=[
+    "https://www.catalog.update.microsoft.com/Search.aspx?q=Cumulative%20Update%20for%20Windows%2010%20Version%2022H2%20for%20x64-based%20Systems",
+    "https://www.catalog.update.microsoft.com/Search.aspx?q=Cumulative%20Update%20for%20.NET%20Framework%203.5%20and%204.8%20for%20Windows%2010%20Version%2022H2%20for%20x64"
+]
+for patch,link in zip(patch_lst,link_lst):
+    WindowsCatalog(date_format+' '+patch,link)
+    
+
