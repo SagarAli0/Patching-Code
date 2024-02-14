@@ -1,10 +1,10 @@
 # Set variables for storage account, container, username, and date
-$storageAccountName = "patchstoreage2"
-$containerName = "windowsupdate"
+$storageAccountName = "storage-account-nmae"
+$containerName = "container-name"
 $currentUsername = $env:USERNAME
 $currentYearMonth = (Get-Date).ToString("yyyy-MM")
 # Set SAS token with specified start and end times with read only access
-$sasToken = "?sp=r&st=2024-01-17T14:17:38Z&se=2024-02-18T22:17:38Z&sv=2022-11-02&sr=c&sig=Wz%2F2JM3JEY8C%2FiHdsZZGIQJtiyiSbVNyuoiec2a9%2BMM%3D"
+$sasToken = "token-id"
 #$sasToken = $args[0]
 # Specify the blobs to download from container, which will works as central repo
 $blobsToDownload = @("Cumulative Update for Windows 10 Version 22H2 for x64-based Systems.msu","Cumulative Update for .NET Framework 3.5, 4.8 and 4.8.1 for Windows 10 Version 22H2 for x64.msu")
