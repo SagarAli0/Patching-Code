@@ -101,8 +101,8 @@ class WindowsCatalog:
         '''
         try:
             # Azure Storage Account details
-            account_name = "patchstoreage2"
-            container_name = "windowsupdate"
+            account_name = "storage-account-name"
+            container_name = "container-name"
 
             # Initialize Managed Identity credentials
             credential = DefaultAzureCredential()
